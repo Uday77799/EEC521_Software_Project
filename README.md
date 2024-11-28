@@ -4,11 +4,12 @@
 
 Download the overall Proect.
 
-Now copy the contents of the Frontend branch to a folder called frontend under the backend folder.
-
-Also download the required .NET SDKs and NODE for your system.
+Copy the contents of the Frontend folder to a folder called frontend.
+Copy the contents of the Backend folder to a folder called backend.
 
 Now navigate to the API/API folder under the backend folder. 
+Download the required .NET SDKs and NODE for your system.
+(https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 
 Then BUILD and RUN the backend.  
  1. dotnet build
