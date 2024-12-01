@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Heading, Text, Button, Stack, Flex, Grid, Table, Thead, Tbody, Tr, Th, Td, useDisclosure, Collapse
+  Image,Badge,HStack, Box,Tooltip, Heading, Text, Button, Stack, Flex, Table, Thead, Tbody, Tr, Th, Td, useDisclosure, Collapse, Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton,
+  Input, FormLabel, FormControl
 } from '@chakra-ui/react';
-import { Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton } from '@chakra-ui/react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import './dashboard.css'; // Import the CSS file with the gradient background\import courseImage from './photos/course-image.png';
+import courseImage from './photos/course-image.png';
+import studentImage from './photos/Avatar/student-avatar1.png'
+import AdminbackImage from './photos/Background1.jpeg'
+import StudentbackImage from './photos/Background2.jpeg'
+
+
+
 
 interface Enrollment {
   courseName: string;
@@ -26,33 +34,42 @@ interface Student {
   studentId: number;
   fullName: string;
   email: string;
-  enrollementdate: string;
 }
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { fullName, userId, userType } = location.state || {}; // Extract userType here
+  const { fullName, userId, userType } = location.state || {};
+  const [currentTime, setCurrentTime] = useState(new Date());
+
 
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [availableCourses, setAvailableCourses] = useState<Course[]>([]);
-  const [students, setStudents] = useState<Student[]>([]); // State to hold student list
-  const [selectedStudentEnrollments, setSelectedStudentEnrollments] = useState<Enrollment[]>([]); // Enrollments for selected student
-  const [selectedStudentName, setSelectedStudentName] = useState<string | null>(null); // Selected student's name
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudentEnrollments, setSelectedStudentEnrollments] = useState<Enrollment[]>([]);
+  const [selectedStudentName, setSelectedStudentName] = useState<string | null>(null);
+  const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null);
+  const [isCoursesOpen, setIsCoursesOpen] = useState(false);
 
-  const [selectedCourseDetails, setSelectedCourseDetails] = useState<Course | null>(null); // Selected course details
-  const [isCoursesOpen, setIsCoursesOpen] = useState(false); // Collapsible state for the courses list
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [studentModalOpen, setStudentModalOpen] = useState(false);
+  const [courseModalOpen, setCourseModalOpen] = useState(false);
 
-  const { isOpen, onOpen, onClose } = useDisclosure();  // Modal state control
-  const [studentModalOpen, setStudentModalOpen] = useState(false);  // Modal for student enrollments
-  const [courseModalOpen, setCourseModalOpen] = useState(false);  // Modal for course details
-  const [isPreviousClassesOpen, setIsPreviousClassesOpen] = useState(false);  // Set to false initially
-  const [isStudentsOpen, setIsStudentsOpen] = useState(false);  // Collapsible state for the student list
-  const [modalMessage, setModalMessage] = useState<string | null>(null);  // Modal message state
-  
+  const [isPreviousClassesOpen, setIsPreviousClassesOpen] = useState(false);
+  const [isStudentsOpen, setIsStudentsOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState<string | null>(null);
+
+  const [isCourseModalOpen, setIsCourseModalOpen] = useState(false); // New course modal
+  const [courseName, setCourseName] = useState('');
+  const [description, setDescription] = useState('');
+  const [maxSeats, setMaxSeats] = useState(0);
+  const [currentSeats, setCurrentSeats] = useState(0);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
 
   useEffect(() => {
-    // Fetch courses regardless of the userType
     const fetchCourses = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/Course/ShowAllCourses');
@@ -61,9 +78,8 @@ const Dashboard: React.FC = () => {
         console.error('Error fetching courses:', error);
       }
     };
-  
+
     if (userType === 1) {
-      // Admin user: Fetch the list of students and courses
       const fetchStudents = async () => {
         try {
           const response = await axios.get('http://localhost:5000/api/Students/ShowAllStudents');
@@ -72,16 +88,15 @@ const Dashboard: React.FC = () => {
           console.error('Error fetching students:', error);
         }
       };
-  
+
       fetchStudents();
       fetchCourses(); // Fetch courses for admin users
     } else if (userType === 2) {
-      // Student user: Fetch enrollments and courses
       const fetchEnrollments = async () => {
         try {
           const response = await axios.get('http://localhost:5000/api/Enrollments/GetAllEnrollments');
           const studentEnrollments = response.data.data.filter((enrollment: any) => enrollment.studentName === fullName);
-  
+
           const processedEnrollments = studentEnrollments.map((enrollment: any) => {
             let progress = 0;
             if (enrollment.completionStatus === "1") {
@@ -95,52 +110,106 @@ const Dashboard: React.FC = () => {
               progress,
             };
           });
-  
+
           setEnrollments(processedEnrollments);
         } catch (error) {
           console.error('Error fetching enrollments:', error);
         }
       };
-  
+
       fetchEnrollments();
       fetchCourses(); // Fetch courses for student users
     }
   }, [fullName, userType]);
 
+  const openAddCourseModal = () => {
+    setIsCourseModalOpen(true);
+  };
+
+  const closeAddCourseModal = () => {
+    setIsCourseModalOpen(false);
+    clearForm();
+  };
+
+  const clearForm = () => {
+    setCourseName('');
+    setDescription('');
+    setMaxSeats(0);
+    setCurrentSeats(0);
+    setStartDate('');
+    setEndDate('');
+    setErrorMessage(null);
+  };
+
+  const handleAddCourse = async () => {
+    if (!courseName || !description || !maxSeats || !currentSeats || !startDate || !endDate) {
+      setErrorMessage('All fields are required.');
+      return;
+    }
+
+    const requestBody = {
+      courseId: Math.floor(Math.random() * 900) + 100, // Random 3-digit courseId
+      courseName,
+      description,
+      maxSeats,
+      currentSeats,
+      startDate: startDate, // Format should already be 'yyyy-mm-dd'
+      endDate: endDate // Format should already be 'yyyy-mm-dd'
+    };
+
+    try {
+      const response = await axios.post('http://localhost:5000/api/Course/CreateCourse', requestBody, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.data && response.data.Message) {
+        setModalMessage(response.data.Message);
+      } else {
+        setModalMessage('Successfully added the course.');
+      }
+
+      onOpen(); // Open success modal
+      closeAddCourseModal(); // Close the course modal
+      clearForm(); // Clear form values
+
+      const fetchCourses = async () => {
+        const response = await axios.get('http://localhost:5000/api/Course/ShowAllCourses');
+        setAvailableCourses(response.data);
+      };
+      fetchCourses();
+    } catch (error: any) {
+      console.error('Error while adding course:', error.response ? error.response.data : error.message);
+      setErrorMessage('An error occurred while adding the course. Please try again.');
+    }
+  };
+
   const handleEnroll = async (courseName: string) => {
     try {
-      // Log the request body for debugging purposes
       const requestBody = {
         studentName: fullName,
         courseName: courseName,
       };
-  
-      console.log('Request Body:', requestBody);
-  
-      // Make the API call to enroll the student in the course
+
       const response = await axios.post('http://localhost:5000/api/Enrollments/JoinCourse', requestBody);
-  
-      // Log the server response for debugging
-      console.log('Server Response:', response.data);
-  
+
       if (response.data && response.data.Message) {
-        setModalMessage(response.data.Message);  // Set the server message to modalMessage
+        setModalMessage(response.data.Message);
       } else {
-        setModalMessage('Successfully enrolled in the course.');  // Default success message
+        setModalMessage('Successfully enrolled in the course.');
       }
-  
+
       onOpen(); // Open the modal to show the message
-  
-      // Refetch the enrollments after enrolling in a course
+
       const fetchEnrollments = async () => {
         try {
           const response = await axios.get('http://localhost:5000/GetAllEnrollments');
-          console.log('Enrollments:', response.data);
-  
+
           const studentEnrollments = response.data.data.filter(
             (enrollment: any) => enrollment.studentName === fullName
           );
-  
+
           const processedEnrollments = studentEnrollments.map((enrollment: any) => {
             let progress = 0;
             if (enrollment.completionStatus === "1") {
@@ -154,34 +223,31 @@ const Dashboard: React.FC = () => {
               progress,
             };
           });
-  
+
           setEnrollments(processedEnrollments);
         } catch (error) {
           console.error('Error refetching enrollments:', error);
           setModalMessage('Error refetching enrollments. Please try again.');
-          onOpen(); // Ensure modal opens on error
+          onOpen();
         }
       };
-  
+
       fetchEnrollments();
     } catch (error: any) {
-      // Improved error handling with detailed logging
       console.error('Error during enrollment:', error);
-  
+
       if (error.response && error.response.data && error.response.data.Message) {
-        setModalMessage(error.response.data.Message);  // Set the error message to modalMessage
+        setModalMessage(error.response.data.Message);
       } else if (error.response && error.response.data) {
-        setModalMessage(error.response.data);  // Set raw error response data to modalMessage
+        setModalMessage(error.response.data);
       } else {
         setModalMessage('An unexpected error occurred. Please try again.');
       }
-  
-      onOpen(); // Ensure the modal opens on error
+
+      onOpen();
     }
   };
-  
 
-  // Fetch enrollments for a particular student
   const handleStudentClick = async (studentName: string) => {
     try {
       const response = await axios.get('http://localhost:5000/api/Enrollments/GetAllEnrollments');
@@ -195,19 +261,18 @@ const Dashboard: React.FC = () => {
 
       setSelectedStudentEnrollments(processedEnrollments);
       setSelectedStudentName(studentName);
-      setStudentModalOpen(true); // Open the modal
+      setStudentModalOpen(true);
     } catch (error) {
       console.error('Error fetching student enrollments:', error);
     }
   };
 
-  // Fetch course details when clicking on a course
   const handleCourseClick = async (courseId: number) => {
     try {
       const course = availableCourses.find(c => c.courseId === courseId);
       if (course) {
         setSelectedCourseDetails(course);
-        setCourseModalOpen(true); // Open the modal
+        setCourseModalOpen(true);
       }
     } catch (error) {
       console.error('Error fetching course details:', error);
@@ -230,159 +295,410 @@ const Dashboard: React.FC = () => {
     setIsCoursesOpen(!isCoursesOpen);
   };
 
-  // Split enrollments into active and previous
   const activeClasses = enrollments.filter((e) => e.completionStatus === '0');
   const previousClasses = enrollments.filter((e) => e.completionStatus === '1');
 
   const getProgressColor = (progress: number) => {
-    if (progress === 100) return 'green.300';
-    if (progress < 60) return 'red.300';
-    if (progress < 90) return 'yellow.300';
-    return 'teal.300';  // Default color
+    if (progress === 100) return 'green.500';
+    if (progress < 59 && progress > 39) return 'orange.300';
+    if (progress < 40 && progress > 0) return 'red.300';
+    if (progress < 89 && progress > 59) return 'green.300';
+    return 'teal.300';
   };
 
-  return (
-    <Flex minHeight="100vh" width="100vw" justify="center" align="start" bg="gray.50" p={6}>
-      <Box p={8} maxWidth="1200px" width="100%" borderWidth={1} borderRadius={8} boxShadow="lg" bg="white">
-        <Heading as="h2" size="xl" mb={6} textAlign="center">
-          {userType === 1 ? 'Admin Dashboard' : 'Student Dashboard'}
-        </Heading>
+  // Dynamically set background image based on userType
+  const backImage = userType === 1 ? AdminbackImage : StudentbackImage;
 
-        <Heading as="h6" size="l" mb={5} textAlign="center">
-          User ID: {userId}, <i><b>{fullName}</b></i>
-        </Heading>
-         {/* Modal for showing enrollment success or error messages */}
-         <Modal isOpen={isOpen} onClose={onClose}>
+  const [currentPage, setCurrentPage] = useState(1);
+  const [currentCoursePage, setCurrentCoursePage] = useState(1);
+  const studentsPerPage = 5; // Number of students per page
+  const coursesPerPage = 5; // Number of courses per page
+
+   // Calculate indexes for the current page
+   const indexOfLastStudent = currentPage * studentsPerPage;
+   const indexOfFirstStudent = indexOfLastStudent - studentsPerPage;
+   const currentStudents = students.slice(indexOfFirstStudent, indexOfLastStudent);
+ 
+   // Calculate total pages
+   const totalPages = Math.ceil(students.length / studentsPerPage);
+
+
+  // Calculate indexes for the current page
+  const indexOfLastCourse = currentPage * coursesPerPage;
+  const indexOfFirstCourse = indexOfLastCourse - coursesPerPage;
+  const currentCourses = availableCourses.slice(indexOfFirstCourse, indexOfLastCourse);
+
+  const totalCoursePages = Math.ceil(availableCourses.length / coursesPerPage);
+
+
+
+  return (
+    <Flex minHeight="100vh" minWidth="100vw"justify="center" align="start" bg="gray.50" p={6} className="gradient-background" >
+      
+      
+      <Box p={8}  width="80%" borderWidth={1} borderRadius="2xl" boxShadow="lg" backgroundColor="whiteAlpha.800">
+
+
+     {/*{userType === 1 ? 'Admin' : 'Student'} */} 
+     <Box bgImage={backImage} bgSize="cover"bgPosition="center"p={10}borderRadius="lg"
+              boxShadow="lg"position="relative"height="300px"width="100%"display="flex"
+                  flexDirection="column"justifyContent="center"alignItems="center"mb={6}   >
+
+                    
+
+      
+  
+  
+   {/* Logout Button */}
+              <Tooltip label="Logout" aria-label="Logout Tooltip" placement="top">
+                    <Button
+                      position="absolute"
+                      top="10px"
+                      right="10px"
+                      size="sm"
+                      padding="10px"
+                      color="red.600"
+                      onClick={handleLogout}
+                      fontSize="3xl"
+                    >
+                      ➲
+                    </Button>
+                  </Tooltip>
+
+  {/* User Info on the top-left */}
+
+  <Box position="absolute" top="20px" left="20px" color="white">
+    <Heading as="h1" size="md" mb={2} fontWeight="bold" fontFamily="Helvetica"  color="blackAlpha.900">
+    {fullName}, 
+    </Heading>
+    <Heading as="h1" size="md" mb={2} fontFamily="Helvetica" fontSize="xl" color="gray.500">
+   <i>{userType === 1 ? 'Admin' : 'Student'}</i>
+    </Heading>
+    {/* Display the current date and time */}
+    <Box textAlign="left" mb={6}>
+            <Text fontSize="md" color="black">
+              {currentTime.toLocaleDateString()}
+            </Text>
+            <Text fontSize="md" color="black">
+             {currentTime.toLocaleTimeString()}
+            </Text>
+          </Box>
+  </Box>
+
+  {/* Main Heading (Dashboard) centered */}
+  
+
+ 
+</Box>
+
+    
+    {/* Add some space between header and the rest of the page */}
+    <Box mt={8} />
+
+        
+        <Modal isOpen={isOpen} onClose={onClose}>
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>Enrollment Status</ModalHeader>
+            <ModalHeader><Text></Text>Enrollment Status</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              <Text>{modalMessage}</Text>
+              <Text ><i>{modalMessage}  !!</i></Text>
             </ModalBody>
             <ModalFooter>
-              <Button colorScheme="blue" onClick={onClose}>Close</Button>
             </ModalFooter>
           </ModalContent>
         </Modal>
 
         {userType === 1 ? (
-          // Admin Dashboard Content
           <>
-            {/* Collapsible Section for List of Students */}
             <Box>
-              <Flex justifyContent="space-between" alignItems="center">
-                <Heading as="h3" size="md" mb={4}>
-                  List of Students
-                </Heading>
-                <Button size="sm" onClick={toggleStudents}>
-                  {isStudentsOpen ? 'Hide' : 'Show'}
-                </Button>
-              </Flex>
-              <Collapse in={isStudentsOpen}>
-                <Flex overflowX="auto" maxHeight="400px">
-                  <Table variant="simple" size="md" width="100%">
-                    <Thead>
-                      <Tr>
-                        <Th position="sticky" top={0} bg="gray.100" width="25%" zIndex={1}>Student ID</Th>
-                        <Th position="sticky" top={0} bg="gray.100" width="100%" zIndex={1}>Full Name</Th>
-                        <Th position="sticky" top={0} bg="gray.100" width="100%" zIndex={1}>Email</Th>
-                      </Tr>
-                    </Thead>
-                    <Tbody>
-                      {students.length > 0 ? (
-                        students.map((student) => (
-                          <Tr key={student.studentId}>
-                            <Td>{student.studentId}</Td>
-                            {/* Make the student name clickable */}
-                            <Td>
-                              <Text
-                                as="button"
-                                color="blue.500"
-                                onClick={() => handleStudentClick(student.fullName)}
-                              >
-                                {student.fullName}
-                              </Text>
-                            </Td>
-                            <Td>{student.email}</Td>
-                          </Tr>
-                        ))
-                      ) : (
-                        <Tr>
-                          <Td colSpan={5} textAlign="center">
-                            No students found.
-                          </Td>
-                        </Tr>
-                      )}
-                    </Tbody>
-                  </Table>
-                </Flex>
-              </Collapse>
-            </Box>
+      <Flex justifyContent="flex-start" alignItems="center" mb={4}>
+        <Heading as="h1" size="lg" mb={4}>
+          List of Students  
+          <Button size="sm" borderRadius="3xl" onClick={toggleStudents}>
+          <i>{isStudentsOpen ? 'Collapse' : 'Expand'}</i> 
+        </Button>
+        </Heading>
+        
+       
+      </Flex>
 
-            {/* Collapsible Section for List of Courses */}
-            <Box mt={6}>
-              <Flex justifyContent="space-between" alignItems="center">
-                <Heading as="h3" size="md" mb={4}>
-                  List of Courses
-                </Heading>
-                <Button size="sm" onClick={toggleCourses}>
-                  {isCoursesOpen ? 'Hide' : 'Show'}
+      <Collapse in={isStudentsOpen}>
+        <Flex overflowX="auto" maxHeight="400px">
+          <Table variant="simple" size="md" width="100%">
+            <Thead>
+              <Tr>
+                <Th
+                  position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}
+                >
+                  Student ID
+                </Th>
+                <Th
+                  position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="50%"
+                  textAlign="center"
+                  zIndex={1}
+                >
+                  Full Name
+                </Th>
+                <Th
+                  position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="50%"
+                  textAlign="center"
+                  zIndex={1}
+                >
+                  Email
+                </Th>
+              </Tr>
+            </Thead>
+            <Tbody>
+              {currentStudents.length > 0 ? (
+                currentStudents.map((student) => (
+                  <Tr key={student.studentId}>
+                    <Td textAlign="center">{student.studentId}</Td>
+                    <Td textAlign="center">
+                      <Text
+                        as="button"
+                        color="blue.500"
+                        fontWeight="bold"
+                        onClick={() => handleStudentClick(student.fullName)}
+                        _hover={{ textDecoration: 'underline' }}
+                      >
+                        {student.fullName}
+                      </Text>
+                    </Td>
+                    <Td textAlign="center">{student.email}</Td>
+                  </Tr>
+                ))
+              ) : (
+                <Tr>
+                  <Td colSpan={3} textAlign="center">
+                    No students found.
+                  </Td>
+                </Tr>
+              )}
+            </Tbody>
+          </Table>
+        </Flex>
+
+        {/* Pagination Controls */}
+        <Flex justifyContent="center" alignItems="center" mt={4}>
+          <Button
+            onClick={() => setCurrentPage(currentPage - 1)}
+            isDisabled={currentPage === 1}
+            colorScheme="Pink" textColor="black" fontSize="2xl"
+          >
+          <span><i>←</i></span>   
+          </Button>
+
+          <Text>
+            Page {currentPage} of {totalPages}
+          </Text>
+
+          <Button
+            onClick={() => setCurrentPage(currentPage + 1)}
+            isDisabled={currentPage === totalPages}
+            colorScheme="Pink" textColor="black" fontSize="2xl"
+          >
+          <span><i>→</i></span>  
+          </Button>
+        </Flex>
+      </Collapse>
+    </Box>
+
+            <Box mt={8}>
+              <Flex justifyContent="flex-start" alignItems="center" mb={4}>
+              <Heading as="h1" size="lg" mb={4}>
+                  List of Courses  
+                  <Button size="sm" borderRadius="3xl"onClick={toggleCourses}>
+                 <i>{isCoursesOpen ? 'Collapse' : 'Expand'}</i> 
                 </Button>
+               </Heading>
+               
               </Flex>
               <Collapse in={isCoursesOpen}>
                 <Flex overflowX="auto" maxHeight="400px">
                   <Table variant="simple" size="md" width="100%">
                     <Thead>
                       <Tr>
-                        <Th position="sticky" top={0} bg="gray.100" width="25%" zIndex={1}>Course ID</Th>
-                        <Th position="sticky" top={0} bg="gray.100" width="40%" zIndex={1}>Course Name</Th>
-                        <Th position="sticky" top={0} bg="gray.100" width="100%" zIndex={1}>Description</Th>
+                        <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>
+                          Course ID
+                          </Th>
+                        <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>
+                          Course Name
+                          </Th>
+                        <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="lg"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>
+                          Description
+                          </Th>
                       </Tr>
                     </Thead>
                     <Tbody>
-                      {availableCourses.length > 0 ? (
-                        availableCourses.map((course) => (
-                          <Tr key={course.courseId}>
-                            <Td>{course.courseId}</Td>
-                            {/* Make the course name clickable */}
-                            <Td>
-                              <Text
-                                as="button"
-                                color="blue.500"
-                                onClick={() => handleCourseClick(course.courseId)}
-                              >
-                                {course.courseName}
-                              </Text>
-                            </Td>
-                            <Td>{course.description}</Td>
-                          </Tr>
-                        ))
-                      ) : (
-                        <Tr>
-                          <Td colSpan={5} textAlign="center">
-                            No courses found.
-                          </Td>
-                        </Tr>
-                      )}
-                    </Tbody>
+            {currentCourses.length > 0 ? (
+              currentCourses.map((course) => (
+                <Tr key={course.courseId}>
+                  <Td textAlign="center"><Text >{course.courseId}</Text></Td>
+                  <Td textAlign="center">
+                    <Text
+                      as="button"
+                      color="blue.500"
+                      onClick={() => handleCourseClick(course.courseId)}
+                      _hover={{ textDecoration: 'underline' }}
+                    >
+                      <b>{course.courseName}</b>
+                    </Text>
+                  </Td>
+                  <Td textAlign="center"><Text >{course.description}</Text></Td>
+                </Tr>
+              ))
+            ) : (
+              <Tr>
+                <Td colSpan={3} textAlign="center">
+                  No courses found.
+                </Td>
+              </Tr>
+            )}
+          </Tbody>
                   </Table>
                 </Flex>
+                
+                <Flex justifyContent="center" alignItems="center" mt={4}>
+                <Button
+          onClick={() => setCurrentCoursePage(currentCoursePage - 1)}
+          isDisabled={currentCoursePage === 1}
+          colorScheme=""
+          textColor="black"
+          fontSize="2xl"
+        >
+          <span><i>←</i></span>
+        </Button>
+
+          <Text>
+            Page {currentCoursePage} of {totalCoursePages}
+          </Text>
+
+          <Button
+          onClick={() => setCurrentCoursePage(currentCoursePage + 1)}
+          isDisabled={currentCoursePage === totalCoursePages}
+          colorScheme=""
+          textColor="black"
+          fontSize="2xl"
+        >
+          <span><i>→</i></span>
+        </Button>
+        </Flex>
+
+                {userType === 1 && (
+                  <Flex justifyContent="flex-end" mt={4}>
+                    <Button colorScheme="gray" onClick={openAddCourseModal}>
+                      Add New Course
+                    </Button>
+                  </Flex>
+                )}
               </Collapse>
             </Box>
+
+            <Modal isOpen={isCourseModalOpen} onClose={closeAddCourseModal} >
+              <ModalOverlay />
+              <ModalContent>
+                <ModalHeader>Fill in the New Course details</ModalHeader>
+                <ModalCloseButton />
+                <ModalBody >
+                  <FormControl isRequired mb={3}>
+                    <FormLabel>Course Name</FormLabel>
+                    <Input value={courseName} onChange={(e) => setCourseName(e.target.value)} />
+                  </FormControl>
+                  <FormControl isRequired mb={3} >
+                    <FormLabel>Description</FormLabel>
+                    <Input value={description} onChange={(e) => setDescription(e.target.value)} />
+                  </FormControl>
+                  <FormControl isRequired mb={3}>
+                    <FormLabel>Max Seats</FormLabel>
+                    <Input type="number" value={maxSeats} onChange={(e) => setMaxSeats(parseInt(e.target.value))} />
+                  </FormControl>
+                  <FormControl isRequired mb={3}>
+                    <FormLabel>Current Seats</FormLabel>
+                    <Input type="number" value={currentSeats} onChange={(e) => setCurrentSeats(parseInt(e.target.value))} />
+                  </FormControl>
+                  <FormControl isRequired mb={3}>
+                    <FormLabel>Start Date</FormLabel>
+                    <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} placeholder="yyyy-mm-dd"  />
+                  </FormControl>
+                  <FormControl isRequired mb={3}>
+                    <FormLabel>End Date</FormLabel>
+                    <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} placeholder="yyyy-mm-dd"  />
+                  </FormControl>
+                  {errorMessage && <Text color="red.500">{errorMessage}</Text>}
+                </ModalBody>
+                <ModalFooter>
+                  <Button colorScheme="blue" onClick={handleAddCourse}>
+                    Add
+                  </Button>
+                  <Button variant="ghost" onClick={closeAddCourseModal} ml={3}>
+                    Cancel
+                  </Button>
+                </ModalFooter>
+              </ModalContent>
+            </Modal>
+
           </>
         ) : (
-          // Student Dashboard Content
           <Stack spacing={6}>
-            {/* Previous Classes Section - Collapsible */}
             <Box>
               <Flex justifyContent="space-between" alignItems="center">
-                <Heading as="h3" size="md" mb={4}>
-                  Completed Courses
-                </Heading>
-                <Button size="sm" onClick={togglePreviousClasses}>
-                  {isPreviousClassesOpen ? 'Hide' : 'Show'}
+                <Heading as="h1" size="lg" mb={4}>
+                  Completed Courses<Button size="sm" borderRadius="3xl"onClick={togglePreviousClasses}>
+                  {isPreviousClassesOpen ? 'Collapse' : 'Expand'}
                 </Button>
+                </Heading>
+                
               </Flex>
               <Collapse in={isPreviousClassesOpen}>
                 <Flex overflowX="auto" direction="row" gap={4}>
@@ -393,7 +709,7 @@ const Dashboard: React.FC = () => {
                         minWidth="250px"
                         p={4}
                         borderWidth={1}
-                        borderRadius={8}
+                        borderRadius="3xl"
                         bg="green.300"
                         textAlign="center"
                       >
@@ -408,9 +724,8 @@ const Dashboard: React.FC = () => {
               </Collapse>
             </Box>
 
-            {/* Active Classes Section */}
             <Box>
-              <Heading as="h3" size="md" mb={4}>
+              <Heading as="h1" size="md" mb={4}>
                 Active Courses
               </Heading>
               <Flex overflowX="auto" direction="row" gap={4}>
@@ -421,7 +736,7 @@ const Dashboard: React.FC = () => {
                       minWidth="250px"
                       p={4}
                       borderWidth={1}
-                      borderRadius={8}
+                      borderRadius="3xl"
                       bg={getProgressColor(enrollment.progress!)}
                       textAlign="center"
                     >
@@ -435,9 +750,8 @@ const Dashboard: React.FC = () => {
               </Flex>
             </Box>
 
-            {/* Available Classes Section */}
             <Box>
-              <Heading as="h3" size="md" mb={4}>
+              <Heading as="h1" size="md" mb={4}>
                 Available Classes
               </Heading>
 
@@ -445,13 +759,76 @@ const Dashboard: React.FC = () => {
                 <Table variant="simple" size="md" width="100%">
                   <Thead>
                     <Tr>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Course Name</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Description</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Max Seats</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Current Seats</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Start Date</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>End Date</Th>
-                      <Th position="sticky" top={0} bg="gray.100" zIndex={1}>Enroll</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>Course Name</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>Description</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>Max Seats</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>Current Seats</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>Start Date</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}>End Date</Th>
+                      <Th position="sticky"
+                  top={0}
+                  bg="blue.800"
+                  color="white"
+                  fontSize="md"
+                  textTransform="uppercase"
+                  fontWeight="bold"
+                  width="25%"
+                  textAlign="center"
+                  zIndex={1}></Th>
                     </Tr>
                   </Thead>
                   <Tbody>
@@ -465,8 +842,8 @@ const Dashboard: React.FC = () => {
                           <Td>{new Date(course.startDate).toLocaleDateString()}</Td>
                           <Td>{new Date(course.endDate).toLocaleDateString()}</Td>
                           <Td>
-                            <Button colorScheme="teal" size="sm" onClick={() => handleEnroll(course.courseName)}>
-                              Add
+                            <Button colorScheme="blue" size="sm" onClick={() => handleEnroll(course.courseName)}>
+                              Enroll
                             </Button>
                           </Td>
                         </Tr>
@@ -485,68 +862,177 @@ const Dashboard: React.FC = () => {
           </Stack>
         )}
 
-        {/* Logout Button */}
-        <Flex justifyContent="flex-end" mt={6}>
-          <Button colorScheme="red" size="md" onClick={handleLogout}>
-            Logout
+       
+
+{/* starting of the editing modal modal */}
+
+<Modal isOpen={studentModalOpen} onClose={() => setStudentModalOpen(false)}>
+  <ModalOverlay />
+    
+  <ModalContent overflowX="auto" borderRadius="lg" boxShadow="dark-lg" maxWidth="600px" maxHeight="700px"  borderWidth="5px">
+    {/* Header section: Student Details */}
+    <Box maxW="100%">
+      <Image src={studentImage} alt="studen_avatar" height="550px" width="100%"/>
+
+      <Box p="4" width="100%" height="100px">
+        <HStack>
+          <Badge color="white" variant="solid">
+            Student
+          </Badge>
+        </HStack>
+        
+        <Text fontWeight="medium"  fontSize="4xl" color="Black">
+          {selectedStudentName}
+        </Text>
+       
+        
+      </Box>
+
+    </Box>
+
+    {/* Enrollment Details */}
+    <ModalBody>
+  <Text fontWeight="bold" fontSize="2xl" color="black" mb={4}>
+    Enrolled Courses
+  </Text>
+
+  {selectedStudentEnrollments.length > 0 ? (
+    <Box position="relative" overflow="hidden" maxW="100%" pb={4}>
+      {/* Left Scroll Arrow */}
+      <Button
+        position="absolute"
+        left={0}
+        top="50%"
+        transform="translateY(-50%)"
+        zIndex={2}
+        bg="rgba(0, 0, 0, 0.0)"
+        color="white"
+        _hover={{ bg: "black" }}
+        onClick={() => {
+          const container = document.querySelector('.carousel-container');
+          container?.scrollBy({ left: 250, behavior: 'smooth' });
+        }}
+      >
+        ◀
+      </Button>
+
+      {/* Scrollable Content */}
+      <Flex
+        gap={6}
+        as="div"
+        className="carousel-container"
+        display="flex"
+        justifyContent="start"
+        alignItems="center"
+        overflowX="auto"
+        sx={{
+          '&::-webkit-scrollbar': { display: 'none' },
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none',
+        }}
+      >
+        {selectedStudentEnrollments.map((enrollment, index) => (
+          <Box
+            key={index}
+            p={4}
+            minW="250px"
+            height="200px"
+            borderWidth={1}
+            borderRadius="3xl"
+            bg={getProgressColor(enrollment.progress!)}
+            boxShadow="md"
+            transition="transform 0.3s ease-in-out"
+            _hover={{
+              transform: 'rotateY(10deg) scale(1.05)',
+              boxShadow: 'lg',
+            }}
+            cursor="pointer"
+          >
+            <Heading size="xl" mb={2} color="white">
+              {enrollment.courseName}
+            </Heading>
+
+            <Text color="white" fontSize="larger">
+             <b>Status:</b>  {enrollment.completionStatus === '1' ? 'Completed' : 'In Progress'}
+            </Text>
+            <Text color="white" fontSize="sm">
+              <b>Progress: </b>{enrollment.progress}%
+            </Text>
+          </Box>
+        ))}
+      </Flex>
+
+      {/* Right Scroll Arrow */}
+      <Button
+        position="absolute"
+        right={0}
+        top="50%"
+        transform="translateY(-50%)"
+        zIndex={2}
+        bg="rgba(0, 0, 0, 0.0)"
+        color="white"
+        _hover={{ textColor:"black", fontSize:"3xl" }}
+        onClick={() => {
+          const container = document.querySelector('.carousel-container');
+          container?.scrollBy({ left: 250, behavior: 'smooth' });
+        }}
+      >
+        ▶
+      </Button>
+    </Box>
+  ) : (
+    <Text>No enrollments found for this student.</Text>
+  )}
+  <ModalCloseButton />
+</ModalBody>
+
+
+    {/* Modal Footer */}
+  
+  </ModalContent>
+</Modal>
+
+
+{/* ending of editing modal  */}
+
+
+        <Modal
+        isOpen={courseModalOpen} onClose={() => setCourseModalOpen(false)} >
+  <ModalOverlay />
+  <ModalContent overflowX="auto" borderRadius="lg" boxShadow="dark-lg" maxWidth="600px" maxHeight="700px"  borderWidth="5px" p={5}>
+    <ModalHeader textStyle="5xl" fontWeight="bold">
+      {selectedCourseDetails?.courseName} Details
+    </ModalHeader>
+    <ModalCloseButton />
+    <ModalBody>
+
+      {selectedCourseDetails ? (
+        <Stack spacing={4}>
+          {/* Adding an optional image like the card design */}
+          <Image src={courseImage} alt="studen_avatar" height="30%px" width="100%"/>
+          
+          
+          <Text fontSize="2xl"><strong>Description:</strong> {selectedCourseDetails.description}</Text>
+          <Text fontSize="lg"><strong>Max Seats:</strong> {selectedCourseDetails.maxSeats}</Text>
+          <Text fontSize="lg"><strong>Current Seats:</strong> {selectedCourseDetails.currentSeats}</Text>
+          <Text fontSize="xl"><strong>Start Date:</strong> {new Date(selectedCourseDetails.startDate).toLocaleDateString()}</Text>
+          <Text fontSize="xl"><strong>End Date:</strong> {new Date(selectedCourseDetails.endDate).toLocaleDateString()}</Text>
+         
+         
+          <Button colorScheme="pink" size="md" padding="5px">
+            <strong>Update Course</strong>
           </Button>
-        </Flex>
 
-        {/* Modal for showing student enrollment details */}
-        <Modal isOpen={studentModalOpen} onClose={() => setStudentModalOpen(false)}>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>{selectedStudentName}'s Enrollments</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              {selectedStudentEnrollments.length > 0 ? (
-                <Stack spacing={4}>
-                  {selectedStudentEnrollments.map((enrollment, index) => (
-                    <Box key={index} p={4} borderWidth={1} borderRadius={8} bg={getProgressColor(enrollment.progress!)}>
-                      <Heading size="sm">{enrollment.courseName}</Heading>
-                      <Text>Completion Status: {enrollment.completionStatus === '1' ? 'Completed' : 'In Progress'}</Text>
-                      <Text>Progress: {enrollment.progress}%</Text>
-                    </Box>
-                  ))}
-                </Stack>
-              ) : (
-                <Text>No enrollments found for this student.</Text>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={() => setStudentModalOpen(false)}>
-                Close
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+        </Stack>
+      ) : (
+        <Text>No details available for this course.</Text>
+      )}
 
-        {/* Modal for showing course details */}
-        <Modal isOpen={courseModalOpen} onClose={() => setCourseModalOpen(false)}>
-          <ModalOverlay />
-          <ModalContent>
-            <ModalHeader>{selectedCourseDetails?.courseName} Details</ModalHeader>
-            <ModalCloseButton />
-            <ModalBody>
-              {selectedCourseDetails ? (
-                <Stack spacing={4}>
-                  <Text><strong>Description:</strong> {selectedCourseDetails.description}</Text>
-                  <Text><strong>Max Seats:</strong> {selectedCourseDetails.maxSeats}</Text>
-                  <Text><strong>Current Seats:</strong> {selectedCourseDetails.currentSeats}</Text>
-                  <Text><strong>Start Date:</strong> {new Date(selectedCourseDetails.startDate).toLocaleDateString()}</Text>
-                  <Text><strong>End Date:</strong> {new Date(selectedCourseDetails.endDate).toLocaleDateString()}</Text>
-                </Stack>
-              ) : (
-                <Text>No details available for this course.</Text>
-              )}
-            </ModalBody>
-            <ModalFooter>
-              <Button colorScheme="blue" mr={3} onClick={() => setCourseModalOpen(false)}>
-                Close
-              </Button>
-            </ModalFooter>
-          </ModalContent>
-        </Modal>
+    </ModalBody>
+    
+  </ModalContent>
+</Modal>
+
       </Box>
     </Flex>
   );
