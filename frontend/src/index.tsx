@@ -1,36 +1,30 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-import { ChakraProvider } from '@chakra-ui/react';
+import './index.css';               // Importing global CSS styles
+import App from './App';             // Importing the main App component
+import { ChakraProvider } from '@chakra-ui/react';  // Chakra UI provider for consistent styling
 import * as serviceWorkerRegistration from './serviceWorkerRegistration';
-import reportWebVitals from './reportWebVitals';
-import Login from './Login';
-import Dashboard from './Dashboard';
-import CoursePage from './Course'
+import reportWebVitals from './reportWebVitals';   // Utility for performance measurement
 
 const root = ReactDOM.createRoot(
-  document.getElementById('root') as HTMLElement
+  document.getElementById('root') as HTMLElement // Finding the root element in HTML to render the app
 );
 
 root.render(
+  // StrictMode checks for potential problems in the application during development
   <React.StrictMode>
+    {/* ChakraProvider wraps the entire app to provide Chakra UI styling across all components */}
     <ChakraProvider>
-    {/* <Login/>
-    <Dashboard />
-    <CoursePage /> */
-    <App/>}
+      {/* Main App component that contains the router and main application structure */}
+      <App />
     </ChakraProvider>
-
-
   </React.StrictMode>
 );
-// If you want your app to work offline and load faster, you can change
-// unregister() to register() below. Note this comes with some pitfalls.
-// Learn more about service workers: https://cra.link/PWA
+
+// Registering the service worker to make the app work offline and load faster.
+// Uncommenting `register()` enables the service worker, but comes with considerations.
 serviceWorkerRegistration.unregister();
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+// Reporting performance metrics for the app. Results are logged in the console
+// or can be sent to an analytics endpoint for detailed insights.
 reportWebVitals();
