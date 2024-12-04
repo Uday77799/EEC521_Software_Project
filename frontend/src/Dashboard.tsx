@@ -113,7 +113,7 @@ const Dashboard: React.FC = () => {
 
           setEnrollments(processedEnrollments);
         } catch (error) {
-          console.error('Error fetching enrollments:', error);
+        //  console.error('Error fetching enrollments:', error);
         }
       };
 
@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
           setEnrollments(processedEnrollments);
         } catch (error) {
           console.error('Error refetching enrollments:', error);
-          setModalMessage('Error refetching enrollments. Please try again.');
+          setModalMessage('If the page doesnot updates, please hit the refresh button.');
           onOpen();
         }
       };
