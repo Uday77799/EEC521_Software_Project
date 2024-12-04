@@ -104,7 +104,7 @@ namespace API.Controllers
 
             if (existingEnrollment != null)
             {
-                return Conflict($"Student '{enrollmentRequest.StudentName}' is already enrolled in '{enrollmentRequest.CourseName}'.");
+                return Conflict($"Student '{enrollmentRequest.StudentName}' was already enrolled in '{enrollmentRequest.CourseName}'. Please Consult with the Admin for re-enrollment");
             }
 
             // Create a new enrollment record for the student
